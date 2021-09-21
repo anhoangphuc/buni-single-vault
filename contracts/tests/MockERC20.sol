@@ -7,4 +7,8 @@ contract MockERC20 is ERC20 {
     constructor(uint256 amount) public ERC20('MockERC20', 'ERC20') {
         _mint(msg.sender, amount);
     }
+
+    function burn() public {
+        _burn(msg.sender, balanceOf(msg.sender));
+    }
 }

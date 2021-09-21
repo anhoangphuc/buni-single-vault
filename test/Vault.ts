@@ -2,7 +2,7 @@ import chai, { expect } from "chai";
 import { BigNumber, Contract } from "ethers";
 import { solidity  } from "ethereum-waffle";
 import { ethers } from "hardhat";
-import { expandTo18Decimals } from "./util";
+import { expandTo18Decimals, mine, withinRange } from "./util";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 
@@ -28,9 +28,12 @@ context('#Vault', async() => {
         interestRate = 100; // 100%
         vaultLimt = expandTo18Decimals(500);    //500 token
 
-        const Vault = await ethers.getContractFactory("Vault", admin);
+
+        const Vault = await ethers.getContractFactory("MockVault", admin);
         vaultContract = await Vault.deploy( vaultToken.address, vestingPeriod, interestRate, vaultLimt );
         await vaultContract.deployed();
+
+        await vaultToken.connect(admin).transfer(vaultContract.address, vaultLimt.mul(interestRate).div(100));
 
         await vaultToken.connect(admin).transfer(account1.address, vaultLimt.mul(10));
         await vaultToken.connect(admin).transfer(account2.address, vaultLimt.mul(10));
@@ -78,6 +81,53 @@ context('#Vault', async() => {
             const availableStake = vaultLimt.sub(stakeAmount);
             await expect(vaultContract.connect(account1).stake(availableStake.add(1)))
                 .to.be.revertedWith("vault limit exceeded");
-        })
+        });
+    });
+
+    context('Getreward correctly', async() => {
+        const stakeAmount = expandTo18Decimals(200);
+        beforeEach(async() => {
+            await vaultContract.connect(account1).stake(stakeAmount);
+        });
+
+        context('half time passed', async() => {
+            beforeEach(async() => {
+                await mine(Math.round(vestingPeriod / 2));
+            });
+
+            it('Earned function correct', async() => {
+                const earned = await vaultContract.earned(account1.address);
+                const expectEarned = stakeAmount.mul(100 + interestRate).div(100).div(2);
+                expect(withinRange(earned, expectEarned));
+            });
+
+            it('Claim correct', async() => {
+                await vaultToken.connect(account1).burn();
+                const earned = stakeAmount.mul(100 + interestRate).div(100).div(2);
+                await vaultContract.connect(account1).claim();
+                const newBalance = await vaultToken.balanceOf(account1.address);
+                expect(withinRange(newBalance, earned));
+            })
+        });
+        
+        context('all time passed', async() => {
+            beforeEach(async() => {
+                await mine(vestingPeriod + 1000);
+            });
+
+            it('Earned function correct', async() => {
+                const earned = await vaultContract.earned(account1.address);
+                const expectEarned = stakeAmount.mul(100 + interestRate).div(100);
+                expect(withinRange(earned, expectEarned));
+            });
+
+            it('Claim correct', async() => {
+                await vaultToken.connect(account1).burn();
+                const earned = stakeAmount.mul(100 + interestRate).div(100);
+                await vaultContract.connect(account1).claim();
+                const newBalance = await vaultToken.balanceOf(account1.address);
+                expect(newBalance).to.be.eq(earned);
+            })
+        });
     })
 })
