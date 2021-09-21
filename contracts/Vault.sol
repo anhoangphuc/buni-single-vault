@@ -45,7 +45,7 @@ contract Vault is IVault, ReentrancyGuard, NativeMetaTransaction {
         vaultToken = IERC20(_vaultToken);
         vaultLimit = _vaultLimit.mul(1 ether);
         interestRate = _interesRate.add(100);
-        vestingPeriod = _vestingPeriod.mul(1 days);
+        vestingPeriod = _vestingPeriod;
         _initializeEIP712('VaultV1');
     }
 
