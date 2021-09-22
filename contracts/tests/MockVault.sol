@@ -34,7 +34,7 @@ contract MockVault is IVault, ReentrancyGuard, NativeMetaTransaction {
 
     mapping(address => uint256) private _balances;
 
-    event Stacked(address indexed account, uint256 amount);
+    event Staked(address indexed account, uint256 amount);
     event Claimed(address indexed account, uint256 amount);
 
     constructor(
@@ -99,7 +99,7 @@ contract MockVault is IVault, ReentrancyGuard, NativeMetaTransaction {
             UserVault(amount, block.timestamp, block.timestamp.add(vestingPeriod), block.timestamp, 0, 0);
         userVaultData.push(userVaultNewEntry);
 
-        emit Stacked(_msgSender(), amount);
+        emit Staked(_msgSender(), amount);
     }
 
     function claim() public override nonReentrant {

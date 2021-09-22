@@ -1,8 +1,8 @@
-import chai, { expect } from "chai";
-import { BigNumber, Contract } from "ethers";
+import chai, { expect, util } from "chai";
+import { BigNumber, Contract, utils } from "ethers";
 import { solidity  } from "ethereum-waffle";
 import { ethers } from "hardhat";
-import { expandTo18Decimals, mine, withinRange } from "./util";
+import { expandTo18Decimals, mine, withinRange, domain, signedTypes } from "./util";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 
@@ -72,7 +72,9 @@ context('#Vault', async() => {
         });
 
         it('Stake second time', async() => {
-            await vaultContract.connect(account1).stake(stakeAmount);
+            await expect(vaultContract.connect(account1).stake(stakeAmount))
+                .to.emit(vaultContract, "Staked")
+                .withArgs(account1.address, stakeAmount);
             const userVaultInfos = await vaultContract.getUserVaultInfo(account1.address);
             expect(userVaultInfos.length).to.be.eq(2);
         });
@@ -124,10 +126,47 @@ context('#Vault', async() => {
             it('Claim correct', async() => {
                 await vaultToken.connect(account1).burn();
                 const earned = stakeAmount.mul(100 + interestRate).div(100);
-                await vaultContract.connect(account1).claim();
+                await expect(vaultContract.connect(account1).claim())
+                    .to.emit(vaultContract, "Claimed");
                 const newBalance = await vaultToken.balanceOf(account1.address);
                 expect(newBalance).to.be.eq(earned);
             })
         });
-    })
+    });
+
+    context('#Meta transaction', async() => {
+        it('Execute stake function', async() => {
+            const stakeAmount = expandTo18Decimals(1);
+            const nonce = await vaultContract.getNonce(account1.address);
+            const descr = new utils.Interface(
+                ["function stake(uint256)"]
+            );
+            const sighash = descr.getSighash("stake(uint256)");
+            const functionSignature = ethers.utils.solidityPack(
+                    ["bytes4", "uint256"],
+                    [sighash, stakeAmount]
+                )
+            const value = {
+                nonce: nonce,
+                from: account1.address,
+                functionSignature: functionSignature
+            }
+            
+            const signature = (await account1._signTypedData(
+                domain(vaultContract.address), signedTypes, value
+            )).slice(2);
+            const r = '0x' + signature.slice(0, 64);
+            const s = '0x' + signature.slice(64, 128);
+            const v = '0x' + signature.slice(128);
+
+            await expect(vaultContract
+                .executeMetaTransaction(account1.address, functionSignature, r, s, v))
+                .to.be.emit(vaultContract, "Staked")
+                .withArgs(account1.address, stakeAmount);
+            
+            const accountBalance = await vaultContract.balanceOf(account1.address);
+            expect(accountBalance).to.be.eq(stakeAmount);
+        });
+    });
+
 })
