@@ -29,7 +29,7 @@ context('#Vault', async() => {
         vaultLimt = expandTo18Decimals(500);    //500 token
 
 
-        const Vault = await ethers.getContractFactory("MockVault", admin);
+        const Vault = await ethers.getContractFactory("Vault", admin);
         vaultContract = await Vault.deploy( vaultToken.address, vestingPeriod, interestRate, vaultLimt );
         await vaultContract.deployed();
 
